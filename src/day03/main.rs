@@ -36,6 +36,44 @@ impl<'a> Rucksack<'a> {
 
         Ok(result.clone())
     }
+
+    pub fn items(&self) -> HashSet<char> {
+        self.items.chars().collect()
+    }
+}
+
+#[derive(Debug)]
+struct Group<'a> {
+    a: &'a Rucksack<'a>,
+    b: &'a Rucksack<'a>,
+    c: &'a Rucksack<'a>,
+}
+
+impl<'a> Group<'a> {
+    pub fn new(input: &'a [Rucksack<'a>]) -> Self {
+        let a = &input[0];
+        let b = &input[1];
+        let c = &input[2];
+
+        Self { a, b, c }
+    }
+
+    pub fn common(&self) -> Result<char> {
+        let ab = self
+            .a
+            .items()
+            .intersection(&self.b.items())
+            .cloned()
+            .collect::<HashSet<_>>();
+
+        let item = ab
+            .intersection(&self.c.items())
+            .cloned()
+            .next()
+            .ok_or_else(|| anyhow!("Common for group not found"))?;
+
+        Ok(item)
+    }
 }
 
 fn main() -> Result<()> {
@@ -57,6 +95,20 @@ fn main() -> Result<()> {
         .sum();
 
     println!("Task A: {}", task_a);
+
+    let groups = &items[..]
+        .chunks_exact(3)
+        .map(Group::new)
+        .collect::<Vec<_>>();
+
+    let task_b: i32 = groups
+        .iter()
+        .map(|item| item.common().and_then(|c| value(&c)))
+        .collect::<Result<Vec<_>>>()?
+        .iter()
+        .sum();
+
+    println!("Task B: {}", task_b);
 
     Ok(())
 }
