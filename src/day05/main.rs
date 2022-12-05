@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::collections::HashMap;
@@ -51,6 +51,7 @@ impl<'a> Iterator for CrateIter<'a> {
     }
 }
 
+#[derive(Clone)]
 struct Stack(Vec<Crate>);
 
 impl Stack {
@@ -76,6 +77,7 @@ impl std::fmt::Debug for Stack {
     }
 }
 
+#[derive(Clone)]
 struct Field(HashMap<usize, Stack>);
 
 impl std::fmt::Debug for Field {
@@ -111,13 +113,24 @@ impl Field {
         Self(stacks)
     }
 
-    pub fn process(&mut self, m: &Move) {
+    pub fn process_a(&mut self, m: &Move) {
         for _ in 0..m.count {
             let from = self.0.get_mut(&m.from).unwrap();
             let c = from.0.pop().unwrap();
             let to = self.0.get_mut(&m.to).unwrap();
             to.0.push(c);
         }
+    }
+
+    pub fn process_b(&mut self, m: &Move) {
+        let from = self.0.get_mut(&m.from).unwrap();
+        let mut tmp = (0..m.count)
+            .map(|_| from.0.pop().unwrap())
+            .collect::<Vec<_>>();
+
+        tmp.reverse();
+        let to = self.0.get_mut(&m.to).unwrap();
+        tmp.into_iter().for_each(|c| to.0.push(c));
     }
 
     pub fn result(&self) -> String {
@@ -130,6 +143,7 @@ impl Field {
     }
 }
 
+#[derive(Clone)]
 struct Move {
     count: usize,
     from: usize,
@@ -171,7 +185,7 @@ impl Move {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Game {
     field: Field,
     moves: Vec<Move>,
@@ -193,9 +207,15 @@ impl Game {
         Ok(Self { field, moves })
     }
 
-    pub fn process(&mut self) {
+    pub fn process_a(&mut self) {
         for m in &self.moves {
-            self.field.process(m);
+            self.field.process_a(m);
+        }
+    }
+
+    pub fn process_b(&mut self) {
+        for m in &self.moves {
+            self.field.process_b(m);
         }
     }
 
@@ -210,13 +230,14 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow!("missing input filename"))?;
 
     let data = std::fs::read_to_string(&filename)?;
-    let mut game = Game::parse(&data)?;
-    dbg!(&game);
+    let mut game_a = Game::parse(&data)?;
+    let mut game_b = game_a.clone();
 
-    game.process();
-    dbg!(&game);
+    game_a.process_a();
+    game_b.process_b();
 
-    println!("{}", game.result());
+    println!("{}", game_a.result());
+    println!("{}", game_b.result());
 
     Ok(())
 }
