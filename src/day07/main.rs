@@ -274,6 +274,10 @@ impl Filesystem {
         let z = y.dirs().collect::<Vec<_>>();
         z.into_iter()
     }
+
+    pub fn size(&self) -> u64 {
+        self.root.borrow().size()
+    }
 }
 
 impl Display for Filesystem {
@@ -311,6 +315,28 @@ fn main() -> Result<()> {
         .sum();
 
     println!("Result A: {}", result_a);
+
+    let total = 70000000;
+    let target = 30000000;
+    let used = filesystem.size();
+    let find_target = used - (total - target);
+
+    let task_b = filesystem
+        .dirs()
+        .filter_map(|(name, size)| {
+            if size >= find_target {
+                println!("{}, {}, {}", name, size, size as i64 - find_target as i64);
+            }
+            if size >= find_target {
+                Some(size)
+            } else {
+                None
+            }
+        })
+        .min()
+        .expect("Min not found");
+
+    println!("Result B: {}", task_b);
 
     Ok(())
 }
