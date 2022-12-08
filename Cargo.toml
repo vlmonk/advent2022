@@ -9,7 +9,10 @@ edition = "2021"
 anyhow = "1"
 regex = "1"
 lazy_static = "*"
+indenter = "*"
 
+[lib]
+path = "src/lib.rs"
 
 [[bin]]
 name = "day01"
@@ -34,3 +37,7 @@ path = "src/day05/main.rs"
 [[bin]]
 name = "day06"
 path = "src/day06/main.rs"
+
+[[bin]]
+name = "day07"
+path = "src/day07/main.rs"
