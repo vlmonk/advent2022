@@ -53,17 +53,30 @@ impl Grid {
         let up = (0..y).all(|n| self.get(x, n) < tree);
         let down = (y + 1..self.height).all(|n| self.get(x, n) < tree);
         let left = (0..x).all(|n| self.get(n, y) < tree);
-        let right = (x + 1..self.width).all(|n| {
-            dbg!(n);
-            dbg!(self.get(n, y));
-            self.get(n, y) < tree
-        });
+        let right = (x + 1..self.width).all(|n| self.get(n, y) < tree);
 
-        dbg!(up, down, left, right);
+        up || down || left || right
+    }
+    fn score(&self, x: usize, y: usize) -> usize {
+        let up = (0..y)
+            .rev()
+            .take_while(|n| *n == y - 1 || self.get(x, *n + 1) < self.get(x, y))
+            .count();
 
-        let result = up || down || left || right;
-        println!("Visible: {}/{}: {}", x, y, result);
-        result
+        let right = (x + 1..self.width)
+            .take_while(|n| *n == x + 1 || self.get(*n - 1, y) < self.get(x, y))
+            .count();
+
+        let down = (y + 1..self.height)
+            .take_while(|n| *n == y + 1 || self.get(x, *n - 1) < self.get(x, y))
+            .count();
+
+        let left = (0..x)
+            .rev()
+            .take_while(|n| *n == x - 1 || self.get(*n + 1, y) < self.get(x, y))
+            .count();
+
+        up * down * left * right
     }
 
     fn get(&self, x: usize, y: usize) -> Tree {
@@ -75,6 +88,13 @@ impl Grid {
             .map(move |y| (0..self.width).map(move |x| (x, y)))
             .flatten()
     }
+
+    pub fn max_score(&self) -> usize {
+        self.all()
+            .map(|(x, y)| self.score(x, y))
+            .max()
+            .expect("Empty grid")
+    }
 }
 
 fn main() -> Result<()> {
@@ -82,6 +102,19 @@ fn main() -> Result<()> {
     let grid = Grid::parse(&raw)?;
     grid.visible(2, 2);
     let result_a = grid.all().filter(|(x, y)| grid.visible(*x, *y)).count();
-    dbg!(result_a);
+    let result_b = grid.max_score();
+    println!("Result A: {}\nResult B: {}", result_a, result_b);
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_score_a() {
+        let input = "555\n555\n555";
+        let grid = Grid::parse(input).unwrap();
+        assert_eq!(grid.max_score(), 1);
+    }
 }

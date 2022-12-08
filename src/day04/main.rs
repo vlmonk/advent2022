@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{anyhow, Error, Result};
 
 fn bad_input(input: &str) -> Error {
     anyhow!("Invalid input: {}", input)
