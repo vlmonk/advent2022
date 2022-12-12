@@ -1,10 +1,12 @@
-use anyhow::{anyhow, bail, Result};
+use std::fmt::Display;
+
+use anyhow::{anyhow, Result};
 use regex::Regex;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum Number {
     Old,
-    Fixed(i32),
+    Fixed(i64),
 }
 
 impl Number {
@@ -12,14 +14,14 @@ impl Number {
         match input {
             "old" => Ok(Number::Old),
             input => input
-                .parse::<i32>()
+                .parse::<i64>()
                 .map(|n| Number::Fixed(n))
                 .map_err(|_| anyhow!("Invalid number: {input}")),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum Op {
     Plus,
     Mul,
@@ -35,7 +37,7 @@ impl Op {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Operation {
     a: Number,
     op: Op,
@@ -67,32 +69,175 @@ impl Operation {
 
         Ok(Self { a, op, b })
     }
+
+    fn calculate(&self, value: i64) -> i64 {
+        let a = match self.a {
+            Number::Old => value,
+            Number::Fixed(n) => n,
+        };
+
+        let b = match self.b {
+            Number::Old => value,
+            Number::Fixed(n) => n,
+        };
+
+        match self.op {
+            Op::Mul => a * b,
+            Op::Plus => a + b,
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Monkey {
     id: usize,
+    items: Vec<i64>,
     operation: Operation,
-    test_div: i32,
+    test_div: i64,
     on_true: usize,
     on_false: usize,
+    inspect_count: usize,
 }
 
 impl Monkey {
     pub fn new(
         id: usize,
+        items: Vec<i64>,
         operation: Operation,
-        test_div: i32,
-        on_false: usize,
+        test_div: i64,
         on_true: usize,
+        on_false: usize,
     ) -> Self {
         Self {
             id,
+            items,
             operation,
             test_div,
             on_false,
             on_true,
+            inspect_count: 0,
         }
+    }
+
+    pub fn process_a(&self, value: i64) -> (i64, usize) {
+        let value = self.operation.calculate(value);
+        let value = value / 3;
+        // let value = value % (23 * 19 * 13 * 17);
+        let target = self.target(value);
+
+        (value, target)
+    }
+
+    pub fn process_b(&self, value: i64, check: i64) -> (i64, usize) {
+        let value = self.operation.calculate(value);
+        let value = value % check;
+        let target = self.target(value);
+
+        (value, target)
+    }
+
+    fn target(&self, value: i64) -> usize {
+        if value % self.test_div == 0 {
+            self.on_true
+        } else {
+            self.on_false
+        }
+    }
+
+    fn take(&mut self) -> Vec<i64> {
+        let mut next = vec![];
+        std::mem::swap(&mut self.items, &mut next);
+
+        next
+    }
+
+    fn add(&mut self, value: i64) {
+        self.items.push(value);
+    }
+
+    fn inspect(&mut self) {
+        self.inspect_count += 1;
+    }
+}
+
+impl Display for Monkey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let id = &self.id;
+        let hold = self
+            .items
+            .iter()
+            .map(|item| format!("{item}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        write!(f, "M {id} [{hold}]")
+    }
+}
+
+#[derive(Clone)]
+struct Game {
+    monkeys: Vec<Monkey>,
+    turn: usize,
+    common: i64,
+}
+
+impl Game {
+    fn new(monkeys: Vec<Monkey>) -> Self {
+        let common = monkeys.iter().map(|m| m.test_div).fold(1, |a, e| a * e);
+        Self {
+            monkeys,
+            turn: 0,
+            common,
+        }
+    }
+
+    fn turn_a(&mut self) {
+        self.turn += 1;
+
+        for i in 0..self.monkeys.len() {
+            let items = self.monkeys[i].take();
+            for item in items {
+                self.monkeys[i].inspect();
+                let (next, target) = self.monkeys[i].process_a(item);
+                self.monkeys[target].add(next);
+            }
+        }
+    }
+    fn turn_b(&mut self) {
+        self.turn += 1;
+
+        for i in 0..self.monkeys.len() {
+            let items = self.monkeys[i].take();
+            for item in items {
+                self.monkeys[i].inspect();
+                let (next, target) = self.monkeys[i].process_b(item, self.common);
+                self.monkeys[target].add(next);
+            }
+        }
+    }
+
+    fn result(&self) -> usize {
+        let mut points = self
+            .monkeys
+            .iter()
+            .map(|m| m.inspect_count)
+            .collect::<Vec<_>>();
+
+        points.sort();
+        points.reverse();
+
+        points[0] * points[1]
+    }
+}
+
+impl Display for Game {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Turn {}\n", self.turn)?;
+        for m in &self.monkeys {
+            write!(f, "{m}\n")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -102,7 +247,7 @@ mod input {
     use anyhow::{anyhow, Result};
     use regex::Regex;
 
-    pub fn parse_input(input: &str) -> Result<(Monkey, Vec<i32>)> {
+    pub fn parse_input(input: &str) -> Result<Monkey> {
         let err = |key: &str| anyhow!("Err: {}", key);
         let mut lines = input.lines();
         let id = lines
@@ -132,9 +277,8 @@ mod input {
             .and_then(parse_throw)
             .ok_or_else(|| err("on false"))?;
 
-        let monkey = Monkey::new(id, op, test_div, on_true, on_false);
-
-        Ok((monkey, items))
+        let monkey = Monkey::new(id, items, op, test_div, on_true, on_false);
+        Ok(monkey)
     }
 
     fn parse_op(input: &str) -> Option<Operation> {
@@ -153,7 +297,7 @@ mod input {
         RE.captures(input)?.get(1)?.as_str().parse::<usize>().ok()
     }
 
-    fn parse_starting(input: &str) -> Option<Vec<i32>> {
+    fn parse_starting(input: &str) -> Option<Vec<i64>> {
         lazy_static::lazy_static! {
             static ref RE: Regex = Regex::new(r"Starting items:\s+(.*)").unwrap();
         };
@@ -161,16 +305,16 @@ mod input {
         let items = RE.captures(input)?.get(1)?.as_str();
         items
             .split(", ")
-            .map(|i| i.parse::<i32>().ok())
-            .collect::<Option<Vec<i32>>>()
+            .map(|i| i.parse::<i64>().ok())
+            .collect::<Option<Vec<i64>>>()
     }
 
-    fn parse_test(input: &str) -> Option<i32> {
+    fn parse_test(input: &str) -> Option<i64> {
         lazy_static::lazy_static! {
             static ref RE: Regex = Regex::new(r"Test: divisible by (\d+)").unwrap();
         };
 
-        RE.captures(input)?.get(1)?.as_str().parse::<i32>().ok()
+        RE.captures(input)?.get(1)?.as_str().parse::<i64>().ok()
     }
 
     fn parse_throw(input: &str) -> Option<usize> {
@@ -186,14 +330,27 @@ use input::parse_input;
 
 fn main() -> Result<()> {
     let raw = advent2022::read_input()?;
-    let blocks = raw
+    let monkeys = raw
         .split("\n\n")
         .map(parse_input)
         .collect::<Result<Vec<_>>>()?;
 
-    dbg!(blocks);
+    let mut game_a = Game::new(monkeys);
+    let mut game_b = game_a.clone();
 
-    println!("Test");
+    for _ in 0..20 {
+        game_a.turn_a();
+    }
+
+    for _ in 0..10000 {
+        game_b.turn_b();
+    }
+
+    let result_a = game_a.result();
+    let result_b = game_b.result();
+
+    println!("Task A: {result_a}");
+    println!("Task B: {result_b}");
 
     Ok(())
 }
