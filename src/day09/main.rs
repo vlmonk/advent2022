@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Step {
     Up(usize),
     Right(usize),
@@ -81,20 +81,20 @@ impl Display for Position {
 
 struct Game {
     head: Position,
-    tail: Position,
+    tail: Vec<Position>,
 
     current: Option<Step>,
     steps: VecDeque<Step>,
 }
 
 impl Game {
-    pub fn new<T>(steps: T) -> Self
+    pub fn new<T>(steps: T, tails: usize) -> Self
     where
         T: Into<VecDeque<Step>>,
     {
         let mut steps = steps.into();
         let head = Position::new(0, 0);
-        let tail = Position::new(0, 0);
+        let tail = (0..tails).map(|_| Position::new(0, 0)).collect();
         let current = steps.pop_front();
 
         Self {
@@ -103,6 +103,16 @@ impl Game {
             tail,
             current,
         }
+    }
+
+    fn tail_visited(&mut self) -> usize {
+        let mut points: HashSet<Position> = HashSet::new();
+
+        for tail in self {
+            points.insert(tail);
+        }
+
+        points.len()
     }
 }
 
@@ -130,23 +140,32 @@ impl Iterator for Game {
             None => return None,
         }
 
-        self.tail.follow(&self.head);
+        for idx in 0..self.tail.len() {
+            if idx == 0 {
+                self.tail[idx].follow(&self.head);
+            } else {
+                let (l, r) = self.tail.split_at_mut(idx);
+                r[0].follow(&l[idx - 1]);
+            }
+        }
 
-        Some(self.tail.clone())
+        Some(self.tail[self.tail.len() - 1].clone())
     }
 }
 
 fn main() -> Result<()> {
     let raw = advent2022::read_input()?;
-    let cmds = raw.lines().map(Step::parse).collect::<Result<Vec<_>>>()?;
-    let game = Game::new(cmds);
-    let mut points: HashSet<Position> = HashSet::new();
+    let cmds_a = raw.lines().map(Step::parse).collect::<Result<Vec<_>>>()?;
+    let cmds_b = cmds_a.clone();
 
-    for tail in game {
-        points.insert(tail);
-    }
+    let mut game_a = Game::new(cmds_a, 1);
+    let result_a = game_a.tail_visited();
 
-    dbg!(points.len());
+    let mut game_b = Game::new(cmds_b, 9);
+    let result_b = game_b.tail_visited();
+
+    println!("Task A: {}", result_a);
+    println!("Task B: {}", result_b);
 
     Ok(())
 }
