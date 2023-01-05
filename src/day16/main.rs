@@ -63,6 +63,8 @@ impl Map {
 struct State {
     current: String,
     open: HashSet<String>,
+    per_min: i32,
+    total: i32,
 }
 
 impl State {
@@ -70,13 +72,22 @@ impl State {
         let current = current.to_owned();
         let open = HashSet::new();
 
-        Self { current, open }
+        Self {
+            current,
+            open,
+            per_min: 0,
+            total: 0,
+        }
     }
 
-    fn process(&self, action: &Action) -> Self {
+    fn process(&self, action: &Action, map: &Map) -> Self {
+        let room = map.find(&self.current);
         let mut state = self.clone();
+        state.total += state.per_min;
+
         match action {
             Action::Open => {
+                state.per_min += room.rate;
                 state.open.insert(self.current.clone());
             }
             Action::MoveTo(to) => state.current = to.clone(),
@@ -98,20 +109,20 @@ impl Game {
     }
 
     fn tick(&mut self) {
-        dbg!(&self.states);
+        // dbg!(&self.states);
         let mut states = vec![];
 
         for s in &self.states {
             for action in self.actions(s) {
-                let next = s.process(&action);
+                let next = s.process(&action, &self.map);
                 let founded = states.iter().find(|current| **current == next);
                 if founded.is_none() {
-                    states.push(s.process(&action));
+                    states.push(next);
                 }
             }
         }
 
-        dbg!(&states);
+        // dbg!(&states);
         self.states = states
     }
 
@@ -140,8 +151,9 @@ fn main() -> Result<()> {
     let input = advent2022::read_input()?;
     let map = Map::parse(&input)?;
     let mut game = Game::new(map);
-    game.tick();
-    game.tick();
-    game.tick();
+    for n in 1..=30 {
+        game.tick();
+        println!("Tick {} - {}", n, game.states.len());
+    }
     Ok(())
 }
