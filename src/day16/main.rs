@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use lazy_static::lazy_static;
@@ -62,7 +62,7 @@ impl Map {
 #[derive(Debug, Clone, PartialEq)]
 struct State {
     current: String,
-    open: HashSet<String>,
+    open: Vec<String>,
     per_min: i32,
     total: i32,
 }
@@ -70,7 +70,7 @@ struct State {
 impl State {
     fn new(current: &str) -> Self {
         let current = current.to_owned();
-        let open = HashSet::new();
+        let open = vec![];
 
         Self {
             current,
@@ -88,7 +88,8 @@ impl State {
         match action {
             Action::Open => {
                 state.per_min += room.rate;
-                state.open.insert(self.current.clone());
+                state.open.push(self.current.clone());
+                state.open.sort();
             }
             Action::MoveTo(to) => state.current = to.clone(),
         };
@@ -110,20 +111,23 @@ impl Game {
 
     fn tick(&mut self) {
         // dbg!(&self.states);
-        let mut states = vec![];
+        type Key = (String, Vec<String>);
+        let mut states: HashMap<Key, State> = HashMap::new();
 
         for s in &self.states {
             for action in self.actions(s) {
                 let next = s.process(&action, &self.map);
-                let founded = states.iter().find(|current| **current == next);
-                if founded.is_none() {
-                    states.push(next);
+                let total = next.total;
+                let key: Key = (next.current.clone(), next.open.clone());
+                let entry = states.entry(key).or_insert(next);
+                if total > entry.total {
+                    entry.total = total
                 }
             }
         }
 
         // dbg!(&states);
-        self.states = states
+        self.states = states.drain().map(|(_, v)| v).collect();
     }
 
     fn actions(&self, state: &State) -> Vec<Action> {
@@ -155,5 +159,8 @@ fn main() -> Result<()> {
         game.tick();
         println!("Tick {} - {}", n, game.states.len());
     }
+
+    let a = game.states.iter().map(|s| s.total).max();
+    dbg!(a);
     Ok(())
 }
