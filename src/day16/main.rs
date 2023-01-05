@@ -189,11 +189,13 @@ enum Action {
     Sleep,
 }
 
+const STEPS_A: usize = 30;
+
 fn main() -> Result<()> {
     let input = advent2022::read_input()?;
     let map = Map::parse(&input)?;
-    let mut game = Game::new(map, 30);
-    for n in 1..=30 {
+    let mut game = Game::new(map, STEPS_A);
+    for n in 1..=STEPS_A {
         game.tick();
         println!("Tick {} - {} - {}", n, game.states.len(), game.remnant);
     }
