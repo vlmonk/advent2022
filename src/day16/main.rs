@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use lazy_static::lazy_static;
@@ -45,12 +45,14 @@ impl Room {
 #[derive(Debug)]
 struct Map {
     rooms: Vec<Room>,
+    valves: usize,
 }
 
 impl Map {
     pub fn parse(input: &str) -> Result<Self> {
         let rooms = input.lines().map(Room::parse).collect::<Result<Vec<_>>>()?;
-        Ok(Self { rooms })
+        let valves = rooms.iter().filter(|r| r.rate > 0).count();
+        Ok(Self { rooms, valves })
     }
 
     pub fn find(&self, name: &str) -> &Room {
@@ -92,6 +94,7 @@ impl State {
                 state.open.sort();
             }
             Action::MoveTo(to) => state.current = to.clone(),
+            Action::Sleep => {}
         };
 
         state
@@ -115,7 +118,7 @@ impl Game {
         let mut states: HashMap<Key, State> = HashMap::new();
 
         for s in &self.states {
-            for action in self.actions(s) {
+            for action in self.actions(s, &self.map) {
                 let next = s.process(&action, &self.map);
                 let total = next.total;
                 let key: Key = (next.current.clone(), next.open.clone());
@@ -130,9 +133,14 @@ impl Game {
         self.states = states.drain().map(|(_, v)| v).collect();
     }
 
-    fn actions(&self, state: &State) -> Vec<Action> {
+    fn actions(&self, state: &State, map: &Map) -> Vec<Action> {
         let room = self.map.find(&state.current);
         let mut actions = vec![];
+
+        if state.open.len() == map.valves {
+            actions.push(Action::Sleep);
+            return actions;
+        }
 
         for dst in &room.dst {
             actions.push(Action::MoveTo(dst.clone()))
@@ -149,6 +157,7 @@ impl Game {
 enum Action {
     Open,
     MoveTo(String),
+    Sleep,
 }
 
 fn main() -> Result<()> {
