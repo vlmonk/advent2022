@@ -46,13 +46,20 @@ impl Room {
 struct Map {
     rooms: Vec<Room>,
     valves: usize,
+    total: i32,
 }
 
 impl Map {
     pub fn parse(input: &str) -> Result<Self> {
         let rooms = input.lines().map(Room::parse).collect::<Result<Vec<_>>>()?;
         let valves = rooms.iter().filter(|r| r.rate > 0).count();
-        Ok(Self { rooms, valves })
+        let total = rooms.iter().map(|r| r.rate).sum();
+
+        Ok(Self {
+            rooms,
+            valves,
+            total,
+        })
     }
 
     pub fn find(&self, name: &str) -> &Room {
@@ -104,16 +111,22 @@ impl State {
 struct Game {
     map: Map,
     states: Vec<State>,
+    remnant: usize,
 }
 
 impl Game {
-    fn new(map: Map) -> Self {
+    fn new(map: Map, steps: usize) -> Self {
         let states = vec![State::new("AA")];
-        Self { map, states }
+        Self {
+            map,
+            states,
+            remnant: steps,
+        }
     }
 
     fn tick(&mut self) {
-        // dbg!(&self.states);
+        self.remnant -= 1;
+
         type Key = (String, Vec<String>);
         let mut states: HashMap<Key, State> = HashMap::new();
 
@@ -129,8 +142,24 @@ impl Game {
             }
         }
 
-        // dbg!(&states);
-        self.states = states.drain().map(|(_, v)| v).collect();
+        let states: Vec<_> = states.drain().map(|(_, v)| v).collect();
+
+        let actual_max = self
+            .states
+            .iter()
+            .map(|s| s.total + s.per_min * self.remnant as i32)
+            .max()
+            .unwrap();
+
+        let states = states
+            .into_iter()
+            .filter(|s| {
+                let poss = s.total + self.map.total * self.remnant as i32;
+                poss >= actual_max
+            })
+            .collect();
+
+        self.states = states;
     }
 
     fn actions(&self, state: &State, map: &Map) -> Vec<Action> {
@@ -163,10 +192,10 @@ enum Action {
 fn main() -> Result<()> {
     let input = advent2022::read_input()?;
     let map = Map::parse(&input)?;
-    let mut game = Game::new(map);
+    let mut game = Game::new(map, 30);
     for n in 1..=30 {
         game.tick();
-        println!("Tick {} - {}", n, game.states.len());
+        println!("Tick {} - {} - {}", n, game.states.len(), game.remnant);
     }
 
     let a = game.states.iter().map(|s| s.total).max();
